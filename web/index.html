@@ -99,8 +99,8 @@
   .btn.primary:hover:not(:disabled) { background: #2f8ad5; }
   .btn:disabled { opacity: .45; cursor: not-allowed; }
   .btn.sm { height: 28px; padding: 0 12px; font: 600 11px/1 var(--mono); letter-spacing: .06em; }
-  .dl { display: flex; align-items: center; gap: 10px; margin: 2px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line-2); }
-  .dl .small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line-2); }
+  .dl .small { flex: 1 0 100%; min-width: 0; line-height: 1.5; overflow-wrap: anywhere; }
   .querybar select { height: 36px; max-width: 220px; background: #fff; border: 1px solid var(--al); border-radius: 2px; padding: 0 8px; color: var(--ink); }
   .vsep { width: 1px; align-self: stretch; margin: 8px 0; background: var(--line-2); }
   .notice { display: none; align-items: center; gap: 8px; height: 36px; padding: 0 10px 0 0; max-width: 230px; flex: none; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11.5px; background: var(--orange-soft); border: 1px solid var(--orange); border-radius: 2px; color: var(--ink); }

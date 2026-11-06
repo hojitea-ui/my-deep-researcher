@@ -454,52 +454,167 @@ async function selectDoc(title, { switchTab = false } = {}) {
   }
 }
 
-// ── 보고서 받기: 지금 보고 있는 시점의 이벤트 상태로 MD 파일을 만든다(서버·모델 호출 없음) ──
+// ── 보고서 받기: 지금 보고 있는 시점의 이벤트 상태로 파일을 만든다(서버·모델 호출 없음) ──
+//    MD = REPORT.md 로 옮기기 좋은 원문, HTML = 브라우저에서 바로 읽고 인쇄(PDF)하기 좋은 공유본. 내용은 같다
 const pctText = (v) => `${(v * 100).toFixed(1)}%`;
 const cell = (v) => String(v).replace(/\|/g, '\\|').replace(/\n/g, ' ');
-const reportFileName = (st) => `report-${st.run?.run_id ?? app.runId ?? 'run'}.md`;
+const reportBase = (st) => `report-${st.run?.run_id ?? app.runId ?? 'run'}`;
+const METRIC_NOTE = '정답표나 판정 모델 없이, 보고서와 실제로 읽은 기록만으로 센 값입니다.';
+const METRIC_PENDING = '⑥ 평가 전 시점에서 받은 파일이라 지표가 아직 없습니다.';
 
-function reportMarkdown(st) {
+// 두 형식이 같이 쓰는 내용: 제목 · 실행 정보 · 본문 · 지표
+function reportParts(st) {
   const run = st.run ?? {};
   const set = run.설정 ?? {};
   const body = st.report.본문.trim();
-  const [title, rest] = body.startsWith('# ') ? [body.split('\n', 1)[0], body.slice(body.indexOf('\n') + 1).trim()] : [`# ${run.질문 ?? '보고서'}`, body];
+  const [title, rest] = body.startsWith('# ')
+    ? [body.split('\n', 1)[0].slice(2).trim(), body.slice(body.indexOf('\n') + 1).trim()]
+    : [run.질문 ?? '보고서', body];
   const t = run.ts ? new Date(run.ts) : null;
   const two = (n) => String(n).padStart(2, '0');
   const when = t ? `${t.getFullYear()}-${two(t.getMonth() + 1)}-${two(t.getDate())} ${two(t.getHours())}:${two(t.getMinutes())}` : '—';
   const where = app.mode === 'replay' ? `저장된 기록 재생 화면 · ${evId(st.cursor)} 시점` : '실제 호출 화면';
   const meta = [
-    `> **질문** ${run.질문 ?? '—'}`,
-    `> **실행** ${run.run_id ?? '—'} · ${run.모드 ?? '—'} · ${when} · 모델 ${run.모델 ?? '—'}`,
-    `> **설정** 절 최대 ${set.max_sections ?? '—'}개 · 절마다 문서 ${set.budget ?? '—'}건 · 최대 ${set.max_rounds ?? '—'}바퀴 · 다시 보내기 ${set.redispatch === false ? '꺼짐' : '켜짐'} · 인용 확인 ${set.check_citations ? '켜짐' : '꺼짐'}`,
-    `> **받은 곳** Research Factory ${where}`,
+    ['질문', run.질문 ?? '—'],
+    ['실행', `${run.run_id ?? '—'} · ${run.모드 ?? '—'} · ${when} · 모델 ${run.모델 ?? '—'}`],
+    ['설정', `절 최대 ${set.max_sections ?? '—'}개 · 절마다 문서 ${set.budget ?? '—'}건 · 최대 ${set.max_rounds ?? '—'}바퀴 · 다시 보내기 ${set.redispatch === false ? '꺼짐' : '켜짐'} · 인용 확인 ${set.check_citations ? '켜짐' : '꺼짐'}`],
+    ['받은 곳', `Research Factory ${where}`],
   ];
-  // 인용 블록 안의 줄을 빈 '>' 줄로 나눠, 뷰어가 한 문단으로 합치지 않게 한다
-  const out = [title, '', meta.join('\n>\n'), '', '---', '', rest, '', '---', '', '## ⑥ 평가 지표', ''];
   const m = st.metrics;
-  if (m) {
-    const top = m.최다인용?.문서 ? ` («${m.최다인용.문서}» ${m.최다인용.곳}곳)` : '';
-    const fake = m.허위인용문서?.length ? ` (${m.허위인용문서.map((d) => `«${d}»`).join(', ')})` : '';
-    out.push(
-      '| 지표 | 값 |', '|---|---|',
-      `| 근거 비율 | ${pctText(m.근거비율)} (${m.문장수}문장 중 ${m.근거문장}문장) |`,
-      `| 허위 인용 | ${m.허위인용}곳${cell(fake)} |`,
-      `| 읽고 안 쓴 문서 | ${m.읽고안쓴문서}건${m.읽고안쓴목록?.length ? cell(` (${m.읽고안쓴목록.join(', ')})`) : ''} |`,
-      `| 편중 | ${pctText(m.편중)}${cell(top)} |`,
-      `| 중복률 | ${pctText(m.중복률)} (읽기 ${m.읽기수}번 · 서로 다른 문서 ${m.서로다른문서}건) |`,
-      '', '정답표나 판정 모델 없이, 보고서와 실제로 읽은 기록만으로 센 값입니다.',
-    );
-  } else {
-    out.push('⑥ 평가 전 시점에서 받은 파일이라 지표가 아직 없습니다.');
-  }
+  const rows = m ? [
+    { k: '근거 비율', v: pctText(m.근거비율), d: `${m.문장수}문장 중 ${m.근거문장}문장` },
+    { k: '허위 인용', v: `${m.허위인용}곳`, d: (m.허위인용문서 ?? []).map((x) => `«${x}»`).join(', '), alert: m.허위인용 > 0 },
+    { k: '읽고 안 쓴 문서', v: `${m.읽고안쓴문서}건`, d: (m.읽고안쓴목록 ?? []).join(', ') },
+    { k: '편중', v: pctText(m.편중), d: m.최다인용?.문서 ? `«${m.최다인용.문서}» ${m.최다인용.곳}곳` : '' },
+    { k: '중복률', v: pctText(m.중복률), d: `읽기 ${m.읽기수}번 · 서로 다른 문서 ${m.서로다른문서}건` },
+  ] : null;
+  return { title, rest, meta, rows };
+}
+
+function reportMarkdown(st) {
+  const { title, rest, meta, rows } = reportParts(st);
+  // 인용 블록 안의 줄을 빈 '>' 줄로 나눠, 뷰어가 한 문단으로 합치지 않게 한다
+  const out = [`# ${title}`, '', meta.map(([k, v]) => `> **${k}** ${v}`).join('\n>\n'), '', '---', '', rest, '', '---', '', '## ⑥ 평가 지표', ''];
+  if (rows) out.push('| 지표 | 값 |', '|---|---|', ...rows.map((r) => `| ${r.k} | ${r.v}${r.d ? cell(` (${r.d})`) : ''} |`), '', METRIC_NOTE);
+  else out.push(METRIC_PENDING);
   return out.join('\n') + '\n';
 }
 
-function downloadReport() {
+// 보고서 본문에 나오는 만큼의 마크다운만 옮긴다: 제목 · 문단 · 목록 · 구분선 · 굵게/기울임 · «인용»
+function mdToHtml(md) {
+  const inline = (t) => esc(t)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])[_*]([^_*\n]+)[_*](?=[\s).,]|$)/g, '$1<em>$2</em>')
+    .replace(/«([^»]+)»/g, '<cite>«$1»</cite>');
+  const out = [];
+  let para = [];
+  let list = null;
+  const flush = () => {
+    if (para.length) { out.push(`<p>${inline(para.join(' '))}</p>`); para = []; }
+    if (list) { out.push(`<${list.tag}>${list.items.map((i) => `<li>${inline(i)}</li>`).join('')}</${list.tag}>`); list = null; }
+  };
+  for (const raw of md.split('\n')) {
+    const line = raw.trim();
+    let m;
+    if (!line) { flush(); continue; }
+    if ((m = line.match(/^(#{1,6})\s+(.*)$/))) { flush(); out.push(`<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`); continue; }
+    if (/^(-{3,}|\*{3,})$/.test(line)) { flush(); out.push('<hr>'); continue; }
+    if ((m = line.match(/^([-*+]|\d+\.)\s+(.*)$/))) {
+      const tag = /\d/.test(m[1]) ? 'ol' : 'ul';
+      if (para.length || (list && list.tag !== tag)) flush();
+      list ??= { tag, items: [] };
+      list.items.push(m[2]);
+      continue;
+    }
+    if (list) flush();
+    para.push(line);
+  }
+  flush();
+  return out.join('\n');
+}
+
+function reportHtmlFile(st) {
+  const { title, rest, meta, rows } = reportParts(st);
+  // 허위 인용(아무도 읽지 않은 문서)은 본문에서도 경고색으로 구분한다
+  const fake = new Set((st.metrics?.허위인용문서 ?? []).map((d) => esc(d)));
+  const article = mdToHtml(rest).replace(/<cite>«([^»]+)»<\/cite>/g, (all, d) => (fake.has(d) ? `<cite class="fake" title="아무도 읽지 않은 문서 — 허위 인용">«${d}»</cite>` : all));
+  const metrics = rows
+    ? `<table><thead><tr><th>지표</th><th>값</th><th>근거</th></tr></thead><tbody>${rows.map((r) => `<tr${r.alert ? ' class="alert"' : ''}><th>${esc(r.k)}</th><td class="num">${esc(r.v)}</td><td>${esc(r.d) || '—'}</td></tr>`).join('')}</tbody></table><p class="note">${METRIC_NOTE}</p>`
+    : `<p class="note">${METRIC_PENDING}</p>`;
+  return `<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)}</title>
+<style>
+  :root { --ink: #30383d; --ink-2: #5b666c; --line: #d4d9da; --paper: #fff; --wash: #f3f4f3; --blue: #287cc2; --cyan: #008f91; --orange: #c16c45;
+    --sans: "Pretendard Variable", Pretendard, "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    --mono: "IBM Plex Mono", "Cascadia Mono", Consolas, "D2Coding", monospace; }
+  * { box-sizing: border-box; }
+  html { background: var(--wash); }
+  body { margin: 0; color: var(--ink); font: 15px/1.75 var(--sans); word-break: keep-all; overflow-wrap: break-word; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .doc { max-width: 760px; margin: 32px auto; padding: 44px 52px 36px; background: var(--paper); border-top: 4px solid var(--ink); }
+  .eyebrow { font: 600 11px/1 var(--mono); letter-spacing: .16em; color: var(--ink-2); text-transform: uppercase; }
+  .eyebrow b { color: var(--ink); }
+  h1 { margin: 14px 0 22px; font-size: 27px; line-height: 1.35; letter-spacing: -.02em; }
+  dl.meta { display: grid; grid-template-columns: 64px 1fr; gap: 6px 14px; margin: 0 0 30px; padding: 14px 16px; background: var(--wash); border-left: 3px solid var(--blue); font-size: 13px; }
+  dl.meta dt { font: 600 12px/1.85 var(--sans); color: var(--ink-2); }
+  dl.meta dd { margin: 0; }
+  article h2 { margin: 34px 0 10px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 19px; line-height: 1.45; }
+  article h2 em { margin-left: 6px; font: 500 12px var(--mono); font-style: normal; color: var(--ink-2); }
+  article h3 { margin: 24px 0 8px; font-size: 16px; }
+  p { margin: 0 0 14px; }
+  cite { font-style: normal; color: var(--cyan); font-weight: 600; white-space: nowrap; }
+  cite.fake { color: var(--orange); text-decoration: underline wavy; text-underline-offset: 3px; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+  section.metrics { margin-top: 40px; padding-top: 16px; border-top: 2px solid var(--ink); }
+  section.metrics h2 { margin: 0 0 12px; font-size: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  thead th { font: 600 12px var(--sans); color: var(--ink-2); border-bottom: 1px solid var(--ink); }
+  tbody th { width: 120px; font-weight: 600; white-space: nowrap; }
+  td.num { width: 90px; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  tr.alert th, tr.alert td.num { color: var(--orange); }
+  .note { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-2); }
+  footer { margin-top: 36px; font: 500 11.5px var(--sans); color: var(--ink-2); }
+  @media (max-width: 640px) { .doc { margin: 0; padding: 28px 20px; } dl.meta { grid-template-columns: 1fr; } }
+  @page { size: A4; margin: 16mm 15mm; }
+  @media print {
+    html { background: none; }
+    .doc { max-width: none; margin: 0; padding: 0; border-top: 0; }
+    h1, h2, h3 { break-after: avoid; }
+    table, tr, dl.meta { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main class="doc">
+<header>
+  <div class="eyebrow"><b>RESEARCH//FACTORY</b> · Research Report</div>
+  <h1>${esc(title)}</h1>
+  <dl class="meta">${meta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+</header>
+<article>
+${article}
+</article>
+<section class="metrics">
+  <h2>⑥ 평가 지표</h2>
+  ${metrics}
+</section>
+<footer>${esc(reportBase(st))} · 딥리서처 6노드 · Research Factory</footer>
+</main>
+</body>
+</html>
+`;
+}
+
+function downloadReport(kind) {
   const st = app.st;
   if (!st?.report) return;
-  const url = URL.createObjectURL(new Blob([reportMarkdown(st)], { type: 'text/markdown;charset=utf-8' }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: reportFileName(st) });
+  const [text, type] = kind === 'html' ? [reportHtmlFile(st), 'text/html'] : [reportMarkdown(st), 'text/markdown'];
+  const url = URL.createObjectURL(new Blob([text], { type: `${type};charset=utf-8` }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: `${reportBase(st)}.${kind}` });
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -507,8 +622,10 @@ function downloadReport() {
 function reportHtml(st) {
   const h = [];
   // 완성품 반출구: ⑤ 종합이 끝난 시점부터 받을 수 있다
-  h.push(`<div class="dl"><button class="btn primary sm" data-act="md"${st.report ? '' : ' disabled'}>MD 받기</button><span class="small">${st.report
-    ? `${esc(reportFileName(st))} · 보고서 ${fmt(st.report.글자수)}자${st.metrics ? ' · 지표 포함' : ' · ⑥ 평가 전'}`
+  // 설명은 버튼 아래 줄에 두고 줄바꿈을 허용한다(좁은 패널에서 말줄임으로 잘리지 않게)
+  const off = st.report ? '' : ' disabled';
+  h.push(`<div class="dl"><button class="btn primary sm" data-act="md"${off} title="REPORT.md 로 옮기기 좋은 원문">MD 받기</button><button class="btn sm" data-act="html"${off} title="브라우저에서 읽고 인쇄(PDF)하기 좋은 공유본">HTML 받기</button><span class="small">${st.report
+    ? `${esc(reportBase(st))}.md / .html · 보고서 ${fmt(st.report.글자수)}자${st.metrics ? ' · 지표 포함' : ' · ⑥ 평가 전'}`
     : app.events.some((e) => e.type === 'report') ? '아직 ⑤ 종합 전 시점이에요 · End 키로 끝으로 가면 받을 수 있어요'
     : '⑤ 종합이 끝나면 받을 수 있어요'}</span></div>`);
   const secs = Object.values(st.sections);
@@ -686,7 +803,7 @@ $('#speed').onclick = (e) => {
 $('#slider').oninput = (e) => { const v = Number(e.target.value); stopPlay(); seek(v, true); };
 $('#log').onclick = (e) => { const row = e.target.closest('.ev'); if (row) { stopPlay(); seek(Number(row.dataset.seq), true); } };
 $('#docList').onclick = (e) => { const row = e.target.closest('.doc'); if (row) selectDoc(row.dataset.doc); };
-$('#report').addEventListener('click', (e) => { if (e.target.closest('[data-act="md"]')) downloadReport(); });
+$('#report').addEventListener('click', (e) => { const b = e.target.closest('[data-act]'); if (b && !b.disabled) downloadReport(b.dataset.act); });
 $('#unitList').onclick = (e) => { const row = e.target.closest('.unit'); if (row) selectUnit(row.dataset.unit); };
 $('#leftBody').addEventListener('click', (e) => { if (e.target.closest('.chip')) return; const card = e.target.closest('.bay[data-unit]'); if (card) selectUnit(card.dataset.unit, { switchTab: true }); });
 $('#docFilters').onclick = (e) => {
