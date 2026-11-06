@@ -625,7 +625,7 @@ function reportHtml(st) {
   // 설명은 버튼 아래 줄에 두고 줄바꿈을 허용한다(좁은 패널에서 말줄임으로 잘리지 않게)
   const off = st.report ? '' : ' disabled';
   h.push(`<div class="dl"><button class="btn primary sm" data-act="md"${off} title="REPORT.md 로 옮기기 좋은 원문">MD 받기</button><button class="btn sm" data-act="html"${off} title="브라우저에서 읽고 인쇄(PDF)하기 좋은 공유본">HTML 받기</button><span class="small">${st.report
-    ? `${esc(reportBase(st))}.md / .html · 보고서 ${fmt(st.report.글자수)}자${st.metrics ? ' · 지표 포함' : ' · ⑥ 평가 전'}`
+    ? `<span class="fn">${esc(reportBase(st))}.md / .html</span><span>보고서 ${fmt(st.report.글자수)}자${st.metrics ? ' · 지표 포함' : ' · ⑥ 평가 전'}</span>`
     : app.events.some((e) => e.type === 'report') ? '아직 ⑤ 종합 전 시점이에요 · End 키로 끝으로 가면 받을 수 있어요'
     : '⑤ 종합이 끝나면 받을 수 있어요'}</span></div>`);
   const secs = Object.values(st.sections);
