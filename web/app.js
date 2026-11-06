@@ -454,8 +454,63 @@ async function selectDoc(title, { switchTab = false } = {}) {
   }
 }
 
+// ── 보고서 받기: 지금 보고 있는 시점의 이벤트 상태로 MD 파일을 만든다(서버·모델 호출 없음) ──
+const pctText = (v) => `${(v * 100).toFixed(1)}%`;
+const cell = (v) => String(v).replace(/\|/g, '\\|').replace(/\n/g, ' ');
+const reportFileName = (st) => `report-${st.run?.run_id ?? app.runId ?? 'run'}.md`;
+
+function reportMarkdown(st) {
+  const run = st.run ?? {};
+  const set = run.설정 ?? {};
+  const body = st.report.본문.trim();
+  const [title, rest] = body.startsWith('# ') ? [body.split('\n', 1)[0], body.slice(body.indexOf('\n') + 1).trim()] : [`# ${run.질문 ?? '보고서'}`, body];
+  const t = run.ts ? new Date(run.ts) : null;
+  const two = (n) => String(n).padStart(2, '0');
+  const when = t ? `${t.getFullYear()}-${two(t.getMonth() + 1)}-${two(t.getDate())} ${two(t.getHours())}:${two(t.getMinutes())}` : '—';
+  const where = app.mode === 'replay' ? `저장된 기록 재생 화면 · ${evId(st.cursor)} 시점` : '실제 호출 화면';
+  const meta = [
+    `> **질문** ${run.질문 ?? '—'}`,
+    `> **실행** ${run.run_id ?? '—'} · ${run.모드 ?? '—'} · ${when} · 모델 ${run.모델 ?? '—'}`,
+    `> **설정** 절 최대 ${set.max_sections ?? '—'}개 · 절마다 문서 ${set.budget ?? '—'}건 · 최대 ${set.max_rounds ?? '—'}바퀴 · 다시 보내기 ${set.redispatch === false ? '꺼짐' : '켜짐'} · 인용 확인 ${set.check_citations ? '켜짐' : '꺼짐'}`,
+    `> **받은 곳** Research Factory ${where}`,
+  ];
+  // 인용 블록 안의 줄을 빈 '>' 줄로 나눠, 뷰어가 한 문단으로 합치지 않게 한다
+  const out = [title, '', meta.join('\n>\n'), '', '---', '', rest, '', '---', '', '## ⑥ 평가 지표', ''];
+  const m = st.metrics;
+  if (m) {
+    const top = m.최다인용?.문서 ? ` («${m.최다인용.문서}» ${m.최다인용.곳}곳)` : '';
+    const fake = m.허위인용문서?.length ? ` (${m.허위인용문서.map((d) => `«${d}»`).join(', ')})` : '';
+    out.push(
+      '| 지표 | 값 |', '|---|---|',
+      `| 근거 비율 | ${pctText(m.근거비율)} (${m.문장수}문장 중 ${m.근거문장}문장) |`,
+      `| 허위 인용 | ${m.허위인용}곳${cell(fake)} |`,
+      `| 읽고 안 쓴 문서 | ${m.읽고안쓴문서}건${m.읽고안쓴목록?.length ? cell(` (${m.읽고안쓴목록.join(', ')})`) : ''} |`,
+      `| 편중 | ${pctText(m.편중)}${cell(top)} |`,
+      `| 중복률 | ${pctText(m.중복률)} (읽기 ${m.읽기수}번 · 서로 다른 문서 ${m.서로다른문서}건) |`,
+      '', '정답표나 판정 모델 없이, 보고서와 실제로 읽은 기록만으로 센 값입니다.',
+    );
+  } else {
+    out.push('⑥ 평가 전 시점에서 받은 파일이라 지표가 아직 없습니다.');
+  }
+  return out.join('\n') + '\n';
+}
+
+function downloadReport() {
+  const st = app.st;
+  if (!st?.report) return;
+  const url = URL.createObjectURL(new Blob([reportMarkdown(st)], { type: 'text/markdown;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: reportFileName(st) });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 function reportHtml(st) {
   const h = [];
+  // 완성품 반출구: ⑤ 종합이 끝난 시점부터 받을 수 있다
+  h.push(`<div class="dl"><button class="btn primary sm" data-act="md"${st.report ? '' : ' disabled'}>MD 받기</button><span class="small">${st.report
+    ? `${esc(reportFileName(st))} · 보고서 ${fmt(st.report.글자수)}자${st.metrics ? ' · 지표 포함' : ' · ⑥ 평가 전'}`
+    : app.events.some((e) => e.type === 'report') ? '아직 ⑤ 종합 전 시점이에요 · End 키로 끝으로 가면 받을 수 있어요'
+    : '⑤ 종합이 끝나면 받을 수 있어요'}</span></div>`);
   const secs = Object.values(st.sections);
   h.push(sec('05.1', 'Section Ledger', '누가 무엇을 읽고 썼나'));
   if (!secs.length) h.push('<div class="small">아직 목차가 없어요.</div>');
@@ -631,6 +686,7 @@ $('#speed').onclick = (e) => {
 $('#slider').oninput = (e) => { const v = Number(e.target.value); stopPlay(); seek(v, true); };
 $('#log').onclick = (e) => { const row = e.target.closest('.ev'); if (row) { stopPlay(); seek(Number(row.dataset.seq), true); } };
 $('#docList').onclick = (e) => { const row = e.target.closest('.doc'); if (row) selectDoc(row.dataset.doc); };
+$('#report').addEventListener('click', (e) => { if (e.target.closest('[data-act="md"]')) downloadReport(); });
 $('#unitList').onclick = (e) => { const row = e.target.closest('.unit'); if (row) selectUnit(row.dataset.unit); };
 $('#leftBody').addEventListener('click', (e) => { if (e.target.closest('.chip')) return; const card = e.target.closest('.bay[data-unit]'); if (card) selectUnit(card.dataset.unit, { switchTab: true }); });
 $('#docFilters').onclick = (e) => {
