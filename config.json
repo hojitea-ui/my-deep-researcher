@@ -1,0 +1,44 @@
+{
+  "model": "gpt-4o-mini",
+  "window_tokens": 128000,
+  "chars_per_token": 2,
+  "max_user_chars": 60000,
+  "settings": {
+    "max_sections": 4,
+    "budget": 3,
+    "use_roles": true,
+    "assign_seeds": true,
+    "respect_zones": true,
+    "redispatch": true,
+    "max_rounds": 2,
+    "check_citations": false
+  },
+  "active_domain": "plants",
+  "domains": {
+    "plants": {
+      "name": "식물과 세계사",
+      "corpus": "data/corpus.json",
+      "questions": "data/questions.json",
+      "roster_required": true,
+      "roster": {
+        "큰그림 담당": "질문의 윤곽을 잡고 핵심 대상·시기·지역을 간추린다",
+        "기원·전파 담당": "작물이나 상품이 어디서 비롯해 언제, 어떤 경로로 퍼졌는지 좇는다",
+        "생산·식량 담당": "재배 조건과 생산, 주식 구조, 인구와 식량 공급의 관계를 자료에 적힌 대로 정리한다",
+        "교역·경제 담당": "수요와 가격, 교역로, 상인·국가·회사가 얻은 이익을 정리한다",
+        "인과 검증 담당": "무엇이 무엇으로 이어졌는지 자료에 적힌 대로 따라가고, 자료가 뒷받침하지 않는 인과는 그렇다고 밝힌다",
+        "비교 담당": "둘 이상을 같은 잣대로 견주어 어디가 다른지 정리한다"
+      },
+      "default_role": "큰그림 담당",
+      "default_question": "후추와 차에 대한 수요는 대항해시대와 유럽의 해외 진출에 어떤 영향을 주었는가?"
+    },
+    "lesson": {
+      "name": "수업 한국 근대사 (개발 확인용)",
+      "corpus": "data/lesson/corpus.json",
+      "questions": null,
+      "roster_required": false,
+      "roster": null,
+      "default_role": null,
+      "default_question": "1894년에 일어난 주요 사건들은 무엇이고 각각의 원인은 무엇인가?"
+    }
+  }
+}

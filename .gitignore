@@ -1,0 +1,15 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.claude/
+.omc/
+
+# 수업에서 받은 자료(수업 코퍼스·결과자료)는 공개 저장소에 올리지 않는다
+data/lesson/
+
+# 실행 기록: 실제 실행만 올린다(키 없이 화면에서 재생). 개발 확인용 기록은 뺀다
+runs/*.jsonl
+!runs/demo_*.jsonl
+!runs/20261106-175316.jsonl
+!runs/20261106-175622.jsonl
