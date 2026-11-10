@@ -148,6 +148,17 @@ class Settings6(Settings):
     # 원고가 아무도 읽지 않은 문서를 인용했거나 인용이 0곳이면 '충분' 신고여도 부족으로 보고 다시 보낸다.
     # 끄면(기본) 교안 규칙 그대로 — '아니요'로 신고한 절만 다시 보낸다.
     check_citations: bool = False
+    # 사용자가 더한 규칙(2026-11-10, 교안 밖·켜고 끔): 인용 확인에 걸린 절을 다시 보낼 때, 지난 원고의 허위 인용을
+    # '(근거 없음)'으로 바꿔 넘기고 인용할 수 있는 문서를 알려 준다. 실험에서 다시 쓴 원고가 지난 원고의
+    # 허위 인용을 그대로 베꼈기 때문이다. check_citations 가 켜져 있을 때만 작동한다.
+    clean_citations: bool = False
+
+
+def strip_citations(text: str, names: list[str]) -> str:
+    """지난 원고에서 허위 인용(«이름»)을 '(근거 없음)'으로 바꾼다. 문장은 그대로 두어 리서처가 근거를 찾거나 빼게 한다."""
+    for name in names:
+        text = text.replace(f"«{name}»", "(근거 없음)")
+    return text
 
 
 def citation_problems(cited: list[str], read_by_anyone: set[str]) -> dict[str, Any] | None:
@@ -275,9 +286,20 @@ class DeepResearch6(DeepResearch):
         avoid = sorted(zone | own_read)
         seed, note = designate_seed(mine["부족"], list(self.corpus.docs), set(avoid), own_read | others_read)
         flag = flags.get(index)
-        gap = " ".join(part for part in (mine["부족"], flag["설명"] if flag else "") if part)
+        explain = flag["설명"] if flag else ""
+        if flag and self.settings.clean_citations:
+            explain = explain.replace("«", "'").replace("»", "'")  # 설명 속 이름도 인용 표기로 베끼지 않게
+        gap = " ".join(part for part in (mine["부족"], explain) if part)
+        prior = mine["본문"]
+        if flag and self.settings.clean_citations:
+            prior = strip_citations(prior, flag["읽지않은인용"])
+            allowed = ", ".join(f"«{doc}»" for doc in sorted(own_read)) or "없음"
+            gap += (
+                f" 인용할 수 있는 것은 이번에 모은 자료의 문서와 지난 바퀴에 읽은 문서({allowed})뿐이다."
+                " 지난 원고의 '(근거 없음)' 자리는 이 문서들로 근거를 달거나, 근거가 없으면 그 문장을 빼라."
+            )
         task: Task = {**base, "시작문서": seed, "지시": redispatch_brief(base["지시"], gap), "피하기": avoid}
-        return task, mine["본문"], gap, note
+        return task, prior, gap, note
 
     # ③ 조사 — 리서처 하나. 스레드에 절 번호를 적어 두면 이 스레드의 모든 이벤트에 붙는다
     def researcher6(self, state: Assignment6) -> dict[str, Any]:

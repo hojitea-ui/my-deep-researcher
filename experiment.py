@@ -6,7 +6,7 @@
   --no-roles · --no-assign · --no-zones 와 같은 스위치이고, 다시 보내기(redispatch)는 6노드에서 더한 장치다.
 - 같은 예산 나누기 (교안 장면 4): 읽는 양이 같을 때 나누는 모양만 바꾼다(2절×4건 · 4절×2건, 둘 다 8건).
   기본 4절×3건과 견준다.
-- ④ 인용 확인(check_citations, 교안 밖 규칙): 끔(기본)과 켬.
+- ④ 인용 확인(check_citations, 교안 밖 규칙): 끔(기본)과 켬, 그리고 켬 + 다시 보낼 때 허위 인용 정리(clean_citations, 11-10 추가).
 
     python experiment.py                 # 아직 안 돈 실행만 이어서 돌린다(실제 호출, 키 필요)
     python experiment.py --dry           # 키 없이 가짜 모델로 도구만 점검한다(기록은 임시 폴더)
@@ -33,7 +33,7 @@ from graph import ROOT, load_config
 OUT = ROOT / "output" / "experiments"
 RESULTS = OUT / "results.jsonl"
 REPEATS = 3
-MAX_CALLS = 50  # 사용자가 정한 이번 실험의 실제 실행 상한(실패 포함)
+MAX_CALLS = 54  # 사용자가 정한 실제 실행 상한(실패 포함): 처음 50번, 11-10 cite-fix 6번을 더해 54번
 QUESTION_IDS = ["Q2", "Q3"]
 
 # 이름 → (무리, 설명, 기본에서 바꾸는 설정)
@@ -46,6 +46,9 @@ SETTINGS: dict[str, tuple[str, str, dict[str, Any]]] = {
     "s2b4": ("같은 예산", "2절×4건 (읽기 8건)", {"max_sections": 2, "budget": 4}),
     "s4b2": ("같은 예산", "4절×2건 (읽기 8건)", {"max_sections": 4, "budget": 2}),
     "cite-on": ("인용 확인", "④ 인용 확인 켬", {"check_citations": True}),
+    # 11-10 추가: cite-on 에서 다시 쓴 원고가 지난 원고의 허위 인용을 베꼈다. 다시 보낼 때 지워서 넘기는 보강을 견준다
+    "cite-fix": ("인용 확인", "④ 인용 확인 켬 + 다시 보낼 때 허위 인용 지우고 인용할 수 있는 문서 알려 주기",
+                 {"check_citations": True, "clean_citations": True}),
 }
 METRICS = [("근거비율", "근거 비율", "pct"), ("허위인용", "허위 인용", "int"), ("읽고안쓴문서", "읽고 안 쓴 문서", "int"),
            ("편중", "편중", "pct"), ("중복률", "중복률", "pct")]

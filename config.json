@@ -11,7 +11,8 @@
     "respect_zones": true,
     "redispatch": true,
     "max_rounds": 2,
-    "check_citations": false
+    "check_citations": false,
+    "clean_citations": false
   },
   "active_domain": "plants",
   "domains": {
