@@ -13,3 +13,5 @@ runs/*.jsonl
 !runs/demo_*.jsonl
 !runs/20261106-175316.jsonl
 !runs/20261106-175622.jsonl
+# 실험 48번(experiment.py)의 실행 기록 — REPORT.md 의 근거, 화면에서 재생할 수 있다
+!runs/exp-*.jsonl
